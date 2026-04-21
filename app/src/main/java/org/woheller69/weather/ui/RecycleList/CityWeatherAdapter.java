@@ -1,6 +1,8 @@
 package org.woheller69.weather.ui.RecycleList;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.util.Log;
 import androidx.core.content.ContextCompat;
 import androidx.preference.PreferenceManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -11,6 +13,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import com.android.volley.DefaultRetryPolicy;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.ImageRequest;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.woheller69.weather.database.CityToWatch;
 
 import com.db.chart.Tools;
 import com.db.chart.model.BarSet;
@@ -57,6 +71,7 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
     public static final int CHART      = 4;
     public static final int EMPTY      = 5;
     public static final int METEOGRAPH = 6;
+    public static final int RADAR      = 7;
 
     public CityWeatherAdapter(CurrentWeatherData currentWeatherDataList, int[] dataSetTypes, Context context) {
         this.currentWeatherDataList = currentWeatherDataList;
@@ -194,6 +209,17 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
         }
     }
 
+    public class RadarViewHolder extends ViewHolder {
+        ImageView radarImage;
+        TextView  radarTime;
+
+        RadarViewHolder(View v) {
+            super(v);
+            this.radarImage = v.findViewById(R.id.card_radar_image);
+            this.radarTime  = v.findViewById(R.id.card_radar_time);
+        }
+    }
+
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup, int viewType) {
         View v;
@@ -233,6 +259,12 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
             v = LayoutInflater.from(viewGroup.getContext())
                     .inflate(R.layout.card_meteograph, viewGroup, false);
             return new MeteographViewHolder(v);
+
+        } else if (viewType == RADAR) {
+
+            v = LayoutInflater.from(viewGroup.getContext())
+                    .inflate(R.layout.card_radar, viewGroup, false);
+            return new RadarViewHolder(v);
 
         } else {
             v = LayoutInflater.from(viewGroup.getContext())
@@ -578,9 +610,55 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
             SQLiteHelper database = SQLiteHelper.getInstance(context.getApplicationContext());
             List<HourlyForecast> allHourly = database.getForecastsByCityId(currentWeatherDataList.getCity_id());
             int tzOffsetMs = currentWeatherDataList.getTimeZoneSeconds() * 1000;
-            holder.meteographView.setData(allHourly, tzOffsetMs);
+            AppPreferencesManager prefManager = new AppPreferencesManager(PreferenceManager.getDefaultSharedPreferences(context));
+            boolean fahrenheit = !prefManager.getTemperatureUnit().equals("°C");
+            holder.meteographView.setData(allHourly, tzOffsetMs, fahrenheit);
+
+        } else if (viewHolder.getItemViewType() == RADAR) {
+            RadarViewHolder holder = (RadarViewHolder) viewHolder;
+            SQLiteHelper database = SQLiteHelper.getInstance(context.getApplicationContext());
+            CityToWatch city = database.getCityToWatch(currentWeatherDataList.getCity_id());
+            int tzSeconds = currentWeatherDataList.getTimeZoneSeconds();
+            fetchAndShowRadar(holder, city, tzSeconds);
         }
         //No update for error needed
+    }
+
+    private void fetchAndShowRadar(RadarViewHolder holder, CityToWatch city, int tzSeconds) {
+        RequestQueue queue = Volley.newRequestQueue(context.getApplicationContext());
+        JsonObjectRequest jsonReq = new JsonObjectRequest(Request.Method.GET,
+                "https://api.rainviewer.com/public/weather-maps.json", null,
+                response -> {
+                    try {
+                        String host = response.getString("host");
+                        JSONArray past = response.getJSONObject("radar").getJSONArray("past");
+                        JSONObject latest = past.getJSONObject(past.length() - 1);
+                        String path = latest.getString("path");
+                        long timeGmt = latest.getLong("time") * 1000L;
+                        int zoom = 7;
+                        String url = host + path + "/512/" + zoom + "/"
+                                + city.getLatitude() + "/" + city.getLongitude() + "/2/1_1.png";
+
+                        ImageRequest imgReq = new ImageRequest(url,
+                                bitmap -> {
+                                    holder.radarImage.setImageBitmap(bitmap);
+                                    long localMs = timeGmt + tzSeconds * 1000L;
+                                    java.text.SimpleDateFormat sdf =
+                                            new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+                                    sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                                    holder.radarTime.setText(sdf.format(new java.util.Date(localMs)));
+                                },
+                                0, 0, ImageView.ScaleType.CENTER_CROP, Bitmap.Config.RGB_565,
+                                error -> Log.d("RadarCard", "img: " + error));
+                        imgReq.setRetryPolicy(new DefaultRetryPolicy(2000, 1, 1f));
+                        queue.add(imgReq);
+                    } catch (JSONException e) {
+                        Log.d("RadarCard", "json: " + e);
+                    }
+                },
+                error -> Log.d("RadarCard", "json: " + error));
+        jsonReq.setRetryPolicy(new DefaultRetryPolicy(2000, 0, 1f));
+        queue.add(jsonReq);
     }
 
     public void setImage(int value, ImageView imageView, boolean isDay) {

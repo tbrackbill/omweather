@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="@color/backgroundBlue">
+        android:background="@color/cardBackground">
 
         <TextView
             android:id="@+id/recycler_view_header"
@@ -25,7 +25,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/white" />
+            android:background="@color/colorAccent" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler_view_course_day"

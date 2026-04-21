@@ -1,11 +1,9 @@
 package org.woheller69.weather.ui;
 
-import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.CHART;
 import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.DAY;
-import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.DETAILS;
 import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.EMPTY;
 import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.METEOGRAPH;
-import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.OVERVIEW;
+import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.RADAR;
 import static org.woheller69.weather.ui.RecycleList.CityWeatherAdapter.WEEK;
 
 import android.annotation.SuppressLint;
@@ -44,7 +42,7 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
     private static final int MINGRIDWIDTH = 500;
     private int mCityId = -1;
     private int[] mDataSetTypes = new int[]{};
-    private static int[] mFull = {METEOGRAPH, OVERVIEW, DAY, WEEK, CHART};
+    private static int[] mFull = {METEOGRAPH, RADAR, DAY, WEEK};
     private static int[] mEmpty = {EMPTY};
     private CityWeatherAdapter mAdapter;
 

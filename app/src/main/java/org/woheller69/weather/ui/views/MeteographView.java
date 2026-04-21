@@ -2,15 +2,13 @@ package org.woheller69.weather.ui.views;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.View;
 
-import androidx.preference.PreferenceManager;
-
 import org.woheller69.weather.database.HourlyForecast;
-import org.woheller69.weather.preferences.AppPreferencesManager;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -24,52 +22,61 @@ import java.util.TimeZone;
 /**
  * FlowX-style dual-panel meteograph.
  *
- * Panel 1 (top): stacked cloud/sun background, rain rate (filled dark blue), wind (green line).
- * Panel 2 (bottom): temperature line with shading vs. 24-hours-prior comparison.
+ * Panel 1 (top ~52%): stacked cloud/sun background, rain rate filled dark blue, wind green line.
+ * Panel 2 (bottom ~48%): temperature line, blue/red shading vs 24-hours-prior.
+ *
+ * Grid: midnight major ticks spanning both panels, noon minor ticks, 4-hour micro dotted ticks.
  */
 public class MeteographView extends View {
 
-    // Precipitation capped at 1 inch/hr = 25.4 mm/hr; wind at ~30 mph = 13.4 m/s
-    private static final float RAIN_CAP_MM  = 25.4f;
-    private static final float WIND_CAP_MS  = 13.4f;
+    // Precipitation capped at 0.4 in/hr = ~10.16 mm/hr
+    private static final float RAIN_CAP_MM = 10.16f;
+    // Wind capped at ~30 mph = 13.4 m/s
+    private static final float WIND_CAP_MS = 13.4f;
 
-    // Colors
-    private static final int COLOR_CLOUD      = 0xFFCDCDCD;  // pastel gray
-    private static final int COLOR_SUN        = 0xFFFFF0A0;  // pastel yellow
-    private static final int COLOR_RAIN       = 0xCC1B4CF0;  // dark blue semi-transparent
-    private static final int COLOR_WIND       = 0xFF4CAF50;  // green
-    private static final int COLOR_TEMP_LINE  = 0xFF024265;  // dark navy (matches colorPrimary)
-    private static final int COLOR_COLD_SHADE = 0x556fa1d2;  // blue tint
-    private static final int COLOR_WARM_SHADE = 0x55e01530;  // red tint
-    private static final int COLOR_LABEL      = 0xFF024265;
-    private static final int COLOR_DIVIDER    = 0x40024265;
+    // ── Colors ──────────────────────────────────────────────────────────────
+    private static final int COLOR_CLOUD       = 0xFFE6DFD0;  // warm beige-gray
+    private static final int COLOR_SUN         = 0xFFFFF7C0;  // pastel yellow
+    private static final int COLOR_RAIN        = 0xCC1B4CF0;  // dark blue semi-transparent
+    private static final int COLOR_WIND        = 0xFF4CAF50;  // green
+    private static final int COLOR_TEMP_LINE   = 0xFF024265;  // dark navy
+    private static final int COLOR_COLD_SHADE  = 0x556fa1d2;  // blue tint
+    private static final int COLOR_WARM_SHADE  = 0x55e01530;  // red tint
+    private static final int COLOR_LABEL       = 0xFF024265;
+    private static final int COLOR_TICK_MAJOR  = 0x70B0BEC8;  // midnight — more visible
+    private static final int COLOR_TICK_MINOR  = 0x48B0BEC8;  // noon
+    private static final int COLOR_TICK_MICRO  = 0x28B0BEC8;  // 4-hour dotted
 
-    // Data
-    private List<HourlyForecast> allForecasts;   // full set from DB, starting today 00:00
-    private List<HourlyForecast> plotForecasts;  // filtered to ~now onward
-    private float[] yesterdayTemp;               // parallel array; NaN if no comparison available
-    private int timezoneOffsetMs = 0;            // city timezone offset in milliseconds
+    // ── Data ────────────────────────────────────────────────────────────────
+    private List<HourlyForecast> allForecasts;
+    private List<HourlyForecast> plotForecasts;
+    private float[] yesterdayTemp;
+    private int timezoneOffsetMs = 0;
+    private boolean useFahrenheit = false;
 
-    // Paints — allocated once
-    private final Paint cloudPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint sunPaint       = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint rainPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint windPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint tempLinePaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint coldShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint warmShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint labelPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint dividerPaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint yLabelPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // ── Paints ──────────────────────────────────────────────────────────────
+    private final Paint cloudPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint sunPaint        = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rainPaint       = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint windPaint       = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint tempLinePaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint coldShadePaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint warmShadePaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dayLabelPaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint yLabelPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint yLabelRightPaint= new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint majorTickPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint minorTickPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint microTickPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    // Reusable paths
-    private final Path sunPath  = new Path();
-    private final Path rainPath = new Path();
-    private final Path windPath = new Path();
-    private final Path tempPath = new Path();
+    // ── Reusable paths ──────────────────────────────────────────────────────
+    private final Path sunPath   = new Path();
+    private final Path rainPath  = new Path();
+    private final Path windPath  = new Path();
+    private final Path tempPath  = new Path();
     private final Path shadePath = new Path();
 
-    // Layout (computed in onSizeChanged)
+    // ── Layout (computed in onSizeChanged) ──────────────────────────────────
     private float plotLeft, plotRight;
     private float p1Top, p1Bot, p2Top, p2Bot;
     private float labelBandMid;
@@ -119,26 +126,42 @@ public class MeteographView extends View {
         warmShadePaint.setColor(COLOR_WARM_SHADE);
         warmShadePaint.setStyle(Paint.Style.FILL);
 
-        labelPaint.setColor(COLOR_LABEL);
-        labelPaint.setTextSize(11f * dp);
-        labelPaint.setTextAlign(Paint.Align.LEFT);
+        dayLabelPaint.setColor(COLOR_LABEL);
+        dayLabelPaint.setTextSize(11f * dp);
+        dayLabelPaint.setTextAlign(Paint.Align.LEFT);
 
         yLabelPaint.setColor(COLOR_LABEL);
         yLabelPaint.setTextSize(9f * dp);
         yLabelPaint.setTextAlign(Paint.Align.RIGHT);
 
-        dividerPaint.setColor(COLOR_DIVIDER);
-        dividerPaint.setStyle(Paint.Style.STROKE);
-        dividerPaint.setStrokeWidth(1f);
+        yLabelRightPaint.setColor(COLOR_LABEL);
+        yLabelRightPaint.setTextSize(9f * dp);
+        yLabelRightPaint.setTextAlign(Paint.Align.LEFT);
+
+        majorTickPaint.setColor(COLOR_TICK_MAJOR);
+        majorTickPaint.setStyle(Paint.Style.STROKE);
+        majorTickPaint.setStrokeWidth(1.5f * dp);
+
+        minorTickPaint.setColor(COLOR_TICK_MINOR);
+        minorTickPaint.setStyle(Paint.Style.STROKE);
+        minorTickPaint.setStrokeWidth(1f * dp);
+
+        microTickPaint.setColor(COLOR_TICK_MICRO);
+        microTickPaint.setStyle(Paint.Style.STROKE);
+        microTickPaint.setStrokeWidth(0.8f * dp);
+        float dash = 4f * dp;
+        microTickPaint.setPathEffect(new DashPathEffect(new float[]{dash, dash}, 0));
     }
 
     /**
-     * Set data. allHourly should be the full unfiltered list from DB (sorted ascending).
-     * tzOffsetMs is the city's UTC offset in milliseconds (from CurrentWeatherData.getTimeZoneSeconds()*1000).
+     * @param allHourly   full unfiltered hourly list from DB, sorted ascending
+     * @param tzOffsetMs  city UTC offset in ms (getTimeZoneSeconds() * 1000)
+     * @param fahrenheit  true when user preference is Fahrenheit
      */
-    public void setData(List<HourlyForecast> allHourly, int tzOffsetMs) {
-        this.allForecasts = allHourly;
+    public void setData(List<HourlyForecast> allHourly, int tzOffsetMs, boolean fahrenheit) {
+        this.allForecasts     = allHourly;
         this.timezoneOffsetMs = tzOffsetMs;
+        this.useFahrenheit    = fahrenheit;
         prepareData();
         invalidate();
     }
@@ -146,7 +169,7 @@ public class MeteographView extends View {
     private void prepareData() {
         if (allForecasts == null || allForecasts.isEmpty()) return;
 
-        long cutoff = System.currentTimeMillis() - 60L * 60 * 1000; // start from 1h ago
+        long cutoff = System.currentTimeMillis() - 60L * 60 * 1000;
         plotForecasts = new ArrayList<>();
         for (HourlyForecast f : allForecasts) {
             if (f.getForecastTime() >= cutoff) plotForecasts.add(f);
@@ -154,7 +177,6 @@ public class MeteographView extends View {
 
         yesterdayTemp = new float[plotForecasts.size()];
         Arrays.fill(yesterdayTemp, Float.NaN);
-
         for (int i = 0; i < plotForecasts.size(); i++) {
             long target = plotForecasts.get(i).getForecastTime() - 24L * 3600 * 1000;
             for (HourlyForecast h : allForecasts) {
@@ -168,20 +190,20 @@ public class MeteographView extends View {
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        float dp = getResources().getDisplayMetrics().density;
-        float leftMargin  = 38f * dp;
-        float rightMargin = 34f * dp;
-        float labelBand   = 17f * dp;
+        float dp   = getResources().getDisplayMetrics().density;
+        float lm   = 38f * dp;   // left margin for Y labels
+        float rm   = 44f * dp;   // right margin for wind label
+        float band = 17f * dp;   // day-label band height
 
-        plotLeft  = leftMargin;
-        plotRight = w - rightMargin;
+        plotLeft  = lm;
+        plotRight = w - rm;
 
-        float usableH = h - labelBand;
+        float usableH = h - band;
         p1Top = 0f;
         p1Bot = usableH * 0.52f;
-        p2Top = p1Bot + labelBand;
+        p2Top = p1Bot + band;
         p2Bot = h;
-        labelBandMid = p1Bot + labelBand * 0.72f;
+        labelBandMid = p1Bot + band * 0.72f;
     }
 
     @Override
@@ -195,27 +217,25 @@ public class MeteographView extends View {
             xs[i] = plotLeft + i * plotW / Math.max(N - 1, 1);
         }
 
-        drawPanel1(canvas, xs, N);
+        drawPanel1Background(canvas, xs, N);
+        drawTickGrid(canvas, xs, N);     // grid over background, under data
+        drawPanel1Data(canvas, xs, N);
         drawDayLabels(canvas, xs, N);
         drawPanel2(canvas, xs, N);
         drawYAxisLabels(canvas);
     }
 
-    // ── Panel 1: cloud/sun background + rain + wind ──────────────────────────
+    // ── Panel 1 background (cloud/sun) ────────────────────────────────────
 
-    private void drawPanel1(Canvas canvas, float[] xs, int N) {
-        float panelH = p1Bot - p1Top;
-
-        // 1. Fill entire panel with cloud gray
+    private void drawPanel1Background(Canvas canvas, float[] xs, int N) {
         canvas.drawRect(plotLeft, p1Top, plotRight, p1Bot, cloudPaint);
 
-        // 2. Sun yellow polygon: from cloud-boundary line down to panel bottom
         float[] cloudBY = new float[N];
         for (int i = 0; i < N; i++) {
             float cover = plotForecasts.get(i).getCloudCover();
             if (cover < 0) cover = cloudCoverFromWeatherCode(plotForecasts.get(i).getWeatherID());
             cover = Math.max(0f, Math.min(100f, cover));
-            cloudBY[i] = p1Top + (cover / 100f) * panelH;
+            cloudBY[i] = p1Top + (cover / 100f) * (p1Bot - p1Top);
         }
 
         sunPath.reset();
@@ -225,12 +245,40 @@ public class MeteographView extends View {
         sunPath.lineTo(xs[0], p1Bot);
         sunPath.close();
         canvas.drawPath(sunPath, sunPaint);
+    }
 
-        // 3. Rain filled area (dark blue, anchored at bottom)
+    // ── Tick grid spanning both panels ────────────────────────────────────
+
+    private void drawTickGrid(Canvas canvas, float[] xs, int N) {
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+
+        for (int i = 0; i < N; i++) {
+            long localTime = plotForecasts.get(i).getForecastTime() + timezoneOffsetMs;
+            cal.setTimeInMillis(localTime);
+            int hour = cal.get(Calendar.HOUR_OF_DAY);
+
+            if (hour == 0) {
+                // Major: midnight — spans both panels
+                canvas.drawLine(xs[i], p1Top, xs[i], p2Bot, majorTickPaint);
+            } else if (hour == 12) {
+                // Minor: noon
+                canvas.drawLine(xs[i], p1Top, xs[i], p2Bot, minorTickPaint);
+            } else if (hour % 4 == 0) {
+                // Micro: every 4 hours, dotted
+                canvas.drawLine(xs[i], p1Top, xs[i], p2Bot, microTickPaint);
+            }
+        }
+    }
+
+    // ── Panel 1 data overlays (rain + wind) ──────────────────────────────
+
+    private void drawPanel1Data(Canvas canvas, float[] xs, int N) {
+        float panelH = p1Bot - p1Top;
+
         rainPath.reset();
         rainPath.moveTo(xs[0], p1Bot);
         for (int i = 0; i < N; i++) {
-            float rain = Math.min(plotForecasts.get(i).getPrecipitation(), RAIN_CAP_MM);
+            float rain  = Math.min(plotForecasts.get(i).getPrecipitation(), RAIN_CAP_MM);
             float rainY = p1Bot - (rain / RAIN_CAP_MM) * panelH;
             rainPath.lineTo(xs[i], rainY);
         }
@@ -238,10 +286,9 @@ public class MeteographView extends View {
         rainPath.close();
         canvas.drawPath(rainPath, rainPaint);
 
-        // 4. Wind line (green, unfilled)
         windPath.reset();
         for (int i = 0; i < N; i++) {
-            float wind = Math.min(plotForecasts.get(i).getWindSpeed(), WIND_CAP_MS);
+            float wind  = Math.min(plotForecasts.get(i).getWindSpeed(), WIND_CAP_MS);
             float windY = p1Bot - (wind / WIND_CAP_MS) * panelH;
             if (i == 0) windPath.moveTo(xs[i], windY);
             else        windPath.lineTo(xs[i], windY);
@@ -249,40 +296,36 @@ public class MeteographView extends View {
         canvas.drawPath(windPath, windPaint);
     }
 
-    // ── Day labels between panels ─────────────────────────────────────────────
+    // ── Day labels in the band between panels ─────────────────────────────
 
     private void drawDayLabels(Canvas canvas, float[] xs, int N) {
         SimpleDateFormat sdf = new SimpleDateFormat("EEE", Locale.getDefault());
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
         Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        float dp = getResources().getDisplayMetrics().density;
 
         int lastDay = -1;
         for (int i = 0; i < N; i++) {
-            // Shift by timezone so day boundaries fall at local midnight
             long localTime = plotForecasts.get(i).getForecastTime() + timezoneOffsetMs;
             cal.setTimeInMillis(localTime);
             int dayOfYear = cal.get(Calendar.DAY_OF_YEAR);
 
             if (dayOfYear != lastDay) {
-                canvas.drawLine(xs[i], p1Bot, xs[i], p2Top, dividerPaint);
                 String label = sdf.format(new Date(localTime));
-                float dp = getResources().getDisplayMetrics().density;
-                canvas.drawText(label, xs[i] + 2f * dp, labelBandMid, labelPaint);
+                canvas.drawText(label, xs[i] + 2f * dp, labelBandMid, dayLabelPaint);
                 lastDay = dayOfYear;
             }
         }
     }
 
-    // ── Panel 2: temperature with yesterday comparison shading ────────────────
+    // ── Panel 2: temperature line + yesterday shading ─────────────────────
 
     private void drawPanel2(Canvas canvas, float[] xs, int N) {
-        // Gather temp range including yesterday values
         float tMin =  Float.MAX_VALUE;
         float tMax = -Float.MAX_VALUE;
         for (int i = 0; i < N; i++) {
-            float t = plotForecasts.get(i).getTemperature();
-            tMin = Math.min(tMin, t);
-            tMax = Math.max(tMax, t);
+            tMin = Math.min(tMin, plotForecasts.get(i).getTemperature());
+            tMax = Math.max(tMax, plotForecasts.get(i).getTemperature());
             if (!Float.isNaN(yesterdayTemp[i])) {
                 tMin = Math.min(tMin, yesterdayTemp[i]);
                 tMax = Math.max(tMax, yesterdayTemp[i]);
@@ -290,15 +333,12 @@ public class MeteographView extends View {
         }
         if (tMax <= tMin) tMax = tMin + 1f;
 
+        float dp     = getResources().getDisplayMetrics().density;
+        float pad    = 6f * dp;
         float panelH = p2Bot - p2Top;
-        float dp = getResources().getDisplayMetrics().density;
-        float pad = 6f * dp;
+        float drawH  = panelH - 2 * pad;
 
-        // Convert temp to Y within panel 2
-        // tMax → p2Top+pad, tMin → p2Bot-pad
-        float drawH = panelH - 2 * pad;
-
-        // Draw yesterday-comparison shading segment by segment
+        // Yesterday shading
         for (int i = 0; i < N - 1; i++) {
             if (Float.isNaN(yesterdayTemp[i]) || Float.isNaN(yesterdayTemp[i + 1])) continue;
 
@@ -307,36 +347,39 @@ public class MeteographView extends View {
             float r0 = yesterdayTemp[i];
             float r1 = yesterdayTemp[i + 1];
 
-            float curY0 = p2Top + pad + (1f - (t0 - tMin) / (tMax - tMin)) * drawH;
-            float curY1 = p2Top + pad + (1f - (t1 - tMin) / (tMax - tMin)) * drawH;
-            float refY0 = p2Top + pad + (1f - (r0 - tMin) / (tMax - tMin)) * drawH;
-            float refY1 = p2Top + pad + (1f - (r1 - tMin) / (tMax - tMin)) * drawH;
+            float curY0 = tempY(t0, tMin, tMax, drawH, pad);
+            float curY1 = tempY(t1, tMin, tMax, drawH, pad);
+            float refY0 = tempY(r0, tMin, tMax, drawH, pad);
+            float refY1 = tempY(r1, tMin, tMax, drawH, pad);
 
-            // Detect line crossing within segment; if crossing, split into two sub-segments
             boolean seg0colder = t0 < r0;
             boolean seg1colder = t1 < r1;
 
             if (seg0colder == seg1colder) {
                 drawShadeSegment(canvas, xs[i], xs[i + 1], curY0, curY1, refY0, refY1, seg0colder);
             } else {
-                // Lines cross: find intersection via linear interpolation
-                float frac = (r0 - t0) / ((t1 - t0) - (r1 - r0));
+                float denom = (t1 - t0) - (r1 - r0);
+                float frac  = (Math.abs(denom) < 1e-6f) ? 0.5f : (r0 - t0) / denom;
+                frac = Math.max(0f, Math.min(1f, frac));
                 float xMid  = xs[i] + frac * (xs[i + 1] - xs[i]);
                 float yMid  = curY0 + frac * (curY1 - curY0);
-                drawShadeSegment(canvas, xs[i],  xMid,         curY0, yMid, refY0, yMid, seg0colder);
-                drawShadeSegment(canvas, xMid, xs[i + 1],      yMid, curY1, yMid, refY1, seg1colder);
+                drawShadeSegment(canvas, xs[i],  xMid,        curY0, yMid, refY0, yMid, seg0colder);
+                drawShadeSegment(canvas, xMid, xs[i + 1],     yMid, curY1, yMid, refY1, seg1colder);
             }
         }
 
-        // Temperature line on top of shading
+        // Temperature line
         tempPath.reset();
         for (int i = 0; i < N; i++) {
-            float t = plotForecasts.get(i).getTemperature();
-            float y = p2Top + pad + (1f - (t - tMin) / (tMax - tMin)) * drawH;
+            float y = tempY(plotForecasts.get(i).getTemperature(), tMin, tMax, drawH, pad);
             if (i == 0) tempPath.moveTo(xs[i], y);
             else        tempPath.lineTo(xs[i], y);
         }
         canvas.drawPath(tempPath, tempLinePaint);
+    }
+
+    private float tempY(float tempC, float tMin, float tMax, float drawH, float pad) {
+        return p2Top + pad + (1f - (tempC - tMin) / (tMax - tMin)) * drawH;
     }
 
     private void drawShadeSegment(Canvas canvas,
@@ -353,28 +396,51 @@ public class MeteographView extends View {
         canvas.drawPath(shadePath, colder ? coldShadePaint : warmShadePaint);
     }
 
-    // ── Y-axis labels ─────────────────────────────────────────────────────────
+    // ── Y-axis labels ──────────────────────────────────────────────────────
 
     private void drawYAxisLabels(Canvas canvas) {
         float dp = getResources().getDisplayMetrics().density;
 
-        // Panel 1: rain scale (left side), wind scale (right side)
-        // Left: rain max label at top, 0 at bottom
-        float p1H = p1Bot - p1Top;
-        canvas.drawText("1\"", plotLeft - 2f * dp, p1Top + yLabelPaint.getTextSize(), yLabelPaint);
-        canvas.drawText("0",   plotLeft - 2f * dp, p1Bot, yLabelPaint);
+        // Panel 1 left: rain scale (0 at bottom, 0.4" at top)
+        canvas.drawText("0.4\"", plotLeft - 2f * dp, p1Top + yLabelPaint.getTextSize(), yLabelPaint);
+        canvas.drawText("0",     plotLeft - 2f * dp, p1Bot, yLabelPaint);
 
-        // Right: wind max at top, 0 at bottom
-        String windMax = "30₀ᵐᵖʰ"; // fallback: just "30mph"
-        yLabelPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText("30mph", plotRight + 2f * dp, p1Top + yLabelPaint.getTextSize(), yLabelPaint);
-        yLabelPaint.setTextAlign(Paint.Align.RIGHT);
+        // Panel 1 right: wind scale (30 mph at top, 0 at bottom)
+        canvas.drawText("30mph", plotRight + 2f * dp, p1Top + yLabelRightPaint.getTextSize(), yLabelRightPaint);
+        canvas.drawText("0",     plotRight + 2f * dp, p1Bot, yLabelRightPaint);
 
-        // Panel 2: draw horizontal gridline at 0°C / 32°F if in range, labeled
-        // (skipped for brevity — the line itself is sufficient visual anchor)
+        // Panel 2 left: temperature scale derived from data
+        if (plotForecasts == null || plotForecasts.isEmpty()) return;
+
+        float tMin =  Float.MAX_VALUE;
+        float tMax = -Float.MAX_VALUE;
+        for (int i = 0; i < plotForecasts.size(); i++) {
+            tMin = Math.min(tMin, plotForecasts.get(i).getTemperature());
+            tMax = Math.max(tMax, plotForecasts.get(i).getTemperature());
+            if (!Float.isNaN(yesterdayTemp[i])) {
+                tMin = Math.min(tMin, yesterdayTemp[i]);
+                tMax = Math.max(tMax, yesterdayTemp[i]);
+            }
+        }
+        if (tMax <= tMin) tMax = tMin + 1f;
+
+        float pad    = 6f * dp;
+        float drawH  = (p2Bot - p2Top) - 2 * pad;
+
+        // Draw 3 evenly spaced labels
+        int steps = 2;
+        for (int s = 0; s <= steps; s++) {
+            float frac  = (float) s / steps;
+            float tempC = tMin + frac * (tMax - tMin);
+            float y     = p2Top + pad + (1f - frac) * drawH;
+            String label = useFahrenheit
+                    ? Math.round(tempC * 9f / 5f + 32) + "°"
+                    : Math.round(tempC) + "°";
+            canvas.drawText(label, plotLeft - 2f * dp, y + yLabelPaint.getTextSize() / 3f, yLabelPaint);
+        }
     }
 
-    // ── Fallback: approximate cloud cover from WMO weather code ──────────────
+    // ── Fallback cloud cover from WMO code ────────────────────────────────
 
     private float cloudCoverFromWeatherCode(int wmoCode) {
         if (wmoCode == 0)  return 5f;
