@@ -38,7 +38,7 @@ public class CourseOfDayAdapter extends RecyclerView.Adapter<CourseOfDayAdapter.
     private RecyclerView weekRecyclerView;
     private Date courseOfDayHeaderDate;
 
-    CourseOfDayAdapter(List<HourlyForecast> courseOfDayList, Context context, TextView recyclerViewHeader, RecyclerView recyclerView) {
+    public CourseOfDayAdapter(List<HourlyForecast> courseOfDayList, Context context, TextView recyclerViewHeader, RecyclerView recyclerView) {
         this.context = context;
         this.courseOfDayList = courseOfDayList;
         this.recyclerViewHeader=recyclerViewHeader;

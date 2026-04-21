@@ -610,9 +610,11 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
             SQLiteHelper database = SQLiteHelper.getInstance(context.getApplicationContext());
             List<HourlyForecast> allHourly = database.getForecastsByCityId(currentWeatherDataList.getCity_id());
             int tzOffsetMs = currentWeatherDataList.getTimeZoneSeconds() * 1000;
-            AppPreferencesManager prefManager = new AppPreferencesManager(PreferenceManager.getDefaultSharedPreferences(context));
+            SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(context);
+            AppPreferencesManager prefManager = new AppPreferencesManager(sp);
             boolean fahrenheit = !prefManager.getTemperatureUnit().equals("°C");
-            holder.meteographView.setData(allHourly, tzOffsetMs, fahrenheit);
+            boolean useMetric  = sp.getString("precipitationUnit", "1").equals("1");
+            holder.meteographView.setData(allHourly, tzOffsetMs, fahrenheit, useMetric);
 
         } else if (viewHolder.getItemViewType() == RADAR) {
             RadarViewHolder holder = (RadarViewHolder) viewHolder;
