@@ -18,7 +18,7 @@ import java.util.List;
  */
 public class SQLiteHelper extends SQLiteOpenHelper {
 
-    private static final int DATABASE_VERSION = 4;
+    private static final int DATABASE_VERSION = 5;
     private Context context;
 
     private List<City> allCities = new ArrayList<>();
@@ -67,6 +67,7 @@ public class SQLiteHelper extends SQLiteOpenHelper {
     private static final String FORECAST_COLUMN_WIND_SPEED = "wind_speed";
     private static final String FORECAST_COLUMN_WIND_DIRECTION = "wind_direction";
     private static final String FORECAST_COLUMN_UV_INDEX = "uv_index";
+    private static final String FORECAST_COLUMN_CLOUD_COVER = "cloud_cover";
 
     //Names of columns in TABLE_WEEKFORECAST
     private static final String WEEKFORECAST_ID = "forecast_id";
@@ -150,7 +151,8 @@ public class SQLiteHelper extends SQLiteOpenHelper {
             FORECAST_COLUMN_PRECIPITATION + " REAL," +
             FORECAST_COLUMN_WIND_SPEED + " REAL," +
             FORECAST_COLUMN_WIND_DIRECTION + " REAL, " +
-            FORECAST_COLUMN_UV_INDEX + " REAL)";
+            FORECAST_COLUMN_UV_INDEX + " REAL, " +
+            FORECAST_COLUMN_CLOUD_COVER + " REAL DEFAULT -1)";
 
     private static final String CREATE_TABLE_WEEKFORECASTS = "CREATE TABLE " + TABLE_WEEKFORECAST +
             "(" +
@@ -213,6 +215,8 @@ public class SQLiteHelper extends SQLiteOpenHelper {
                 db.execSQL("ALTER TABLE "+TABLE_WEEKFORECAST+" ADD COLUMN "+ WEEKFORECAST_COLUMN_SUNSHINE_HOURS +" REAL DEFAULT 0");
             case 3:
                 db.execSQL("ALTER TABLE " + TABLE_HOURLY_FORECAST+" ADD COLUMN " + FORECAST_COLUMN_UV_INDEX + " REAL DEFAULT -1");
+            case 4:
+                db.execSQL("ALTER TABLE " + TABLE_HOURLY_FORECAST+" ADD COLUMN " + FORECAST_COLUMN_CLOUD_COVER + " REAL DEFAULT -1");
         }
     }
 
@@ -464,6 +468,7 @@ public class SQLiteHelper extends SQLiteOpenHelper {
             values.put(FORECAST_COLUMN_WIND_SPEED, hourlyForecast.getWindSpeed());
             values.put(FORECAST_COLUMN_WIND_DIRECTION, hourlyForecast.getWindDirection());
             values.put(FORECAST_COLUMN_UV_INDEX, hourlyForecast.getUvIndex());
+            values.put(FORECAST_COLUMN_CLOUD_COVER, hourlyForecast.getCloudCover());
             database.insert(TABLE_HOURLY_FORECAST, null, values);
         }
         database.close();
@@ -492,7 +497,8 @@ public class SQLiteHelper extends SQLiteOpenHelper {
                         FORECAST_COLUMN_PRECIPITATION,
                         FORECAST_COLUMN_WIND_SPEED,
                         FORECAST_COLUMN_WIND_DIRECTION,
-                        FORECAST_COLUMN_UV_INDEX}
+                        FORECAST_COLUMN_UV_INDEX,
+                        FORECAST_COLUMN_CLOUD_COVER}
                 , FORECAST_CITY_ID + "=?",
                 new String[]{String.valueOf(cityId)}, null, null, null, null);
 
@@ -514,6 +520,7 @@ public class SQLiteHelper extends SQLiteOpenHelper {
                 hourlyForecast.setWindSpeed(Float.parseFloat(cursor.getString(9)));
                 hourlyForecast.setWindDirection(Float.parseFloat(cursor.getString(10)));
                 hourlyForecast.setUvIndex(Float.parseFloat(cursor.getString(11)));
+                hourlyForecast.setCloudCover(Float.parseFloat(cursor.getString(12)));
                 list.add(hourlyForecast);
             } while (cursor.moveToNext());
 

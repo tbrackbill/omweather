@@ -20,6 +20,7 @@ public class HourlyForecast {
     private float windDirection;
     private float precipitation;
     private float uvIndex = -1;
+    private float cloudCover = -1;
 
 
     public HourlyForecast() {
@@ -164,5 +165,13 @@ public class HourlyForecast {
 
     public void setUvIndex(float uvIndex) {
         this.uvIndex = uvIndex;
+    }
+
+    public float getCloudCover() {
+        return cloudCover;
+    }
+
+    public void setCloudCover(float cloudCover) {
+        this.cloudCover = cloudCover;
     }
 }

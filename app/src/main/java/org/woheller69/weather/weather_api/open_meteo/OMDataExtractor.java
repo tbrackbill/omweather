@@ -138,6 +138,7 @@ public class OMDataExtractor implements IDataExtractor {
             JSONArray showersArray = jsonData.has("showers") ? jsonData.getJSONArray("showers") : null;
             JSONArray rainArray = jsonData.has("rain") ? jsonData.getJSONArray("rain") : null;
             JSONArray uvIndexArray = jsonData.has("uv_index") ? jsonData.getJSONArray("uv_index") : null;
+            JSONArray cloudCoverArray = jsonData.has("cloud_cover") ? jsonData.getJSONArray("cloud_cover") : null;
 
             IApiToDatabaseConversion conversion = new OMToDatabaseConversion();
             for (int i = 0; i < timeArray.length(); i++) {
@@ -165,6 +166,7 @@ public class OMDataExtractor implements IDataExtractor {
                 if (windSpeedArray != null && !windSpeedArray.isNull(i)) hourlyForecast.setWindSpeed((float) windSpeedArray.getDouble(i));
                 if (windDirArray != null && !windDirArray.isNull(i)) hourlyForecast.setWindDirection((float) windDirArray.getDouble(i));
                 if (uvIndexArray != null && !uvIndexArray.isNull(i)) hourlyForecast.setUvIndex((float)uvIndexArray.getDouble(i));
+                if (cloudCoverArray != null && !cloudCoverArray.isNull(i)) hourlyForecast.setCloudCover((float)cloudCoverArray.getDouble(i));
                 hourlyForecasts.add(hourlyForecast);
             }
             return hourlyForecasts;
