@@ -29,6 +29,7 @@ import org.woheller69.weather.database.WeekForecast;
 import org.woheller69.weather.preferences.AppPreferencesManager;
 import org.woheller69.weather.ui.Help.StringFormatUtils;
 import org.woheller69.weather.ui.UiResourceProvider;
+import org.woheller69.weather.ui.views.MeteographView;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -49,12 +50,13 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
 
     private CurrentWeatherData currentWeatherDataList;
 
-    public static final int OVERVIEW = 0;
-    public static final int DETAILS = 1;
-    public static final int WEEK = 2;
-    public static final int DAY = 3;
-    public static final int CHART = 4;
-    public static final int EMPTY = 5;
+    public static final int OVERVIEW   = 0;
+    public static final int DETAILS    = 1;
+    public static final int WEEK       = 2;
+    public static final int DAY        = 3;
+    public static final int CHART      = 4;
+    public static final int EMPTY      = 5;
+    public static final int METEOGRAPH = 6;
 
     public CityWeatherAdapter(CurrentWeatherData currentWeatherDataList, int[] dataSetTypes, Context context) {
         this.currentWeatherDataList = currentWeatherDataList;
@@ -183,6 +185,15 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
         }
     }
 
+    public class MeteographViewHolder extends ViewHolder {
+        MeteographView meteographView;
+
+        MeteographViewHolder(View v) {
+            super(v);
+            this.meteographView = v.findViewById(R.id.meteograph_view);
+        }
+    }
+
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup viewGroup, int viewType) {
         View v;
@@ -216,6 +227,13 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
             v = LayoutInflater.from(viewGroup.getContext())
                     .inflate(R.layout.card_chart, viewGroup, false);
             return new ChartViewHolder(v);
+
+        } else if (viewType == METEOGRAPH) {
+
+            v = LayoutInflater.from(viewGroup.getContext())
+                    .inflate(R.layout.card_meteograph, viewGroup, false);
+            return new MeteographViewHolder(v);
+
         } else {
             v = LayoutInflater.from(viewGroup.getContext())
                     .inflate(R.layout.card_empty, viewGroup, false);
@@ -554,6 +572,13 @@ public class CityWeatherAdapter extends RecyclerView.Adapter<CityWeatherAdapter.
 
             holder.temperatureunit.setText(" "+ prefManager.getTemperatureUnit() + " ");
             holder.precipitationunit.setText(" " + prefManager.getPrecipitationUnit(context) + " ");
+
+        } else if (viewHolder.getItemViewType() == METEOGRAPH) {
+            MeteographViewHolder holder = (MeteographViewHolder) viewHolder;
+            SQLiteHelper database = SQLiteHelper.getInstance(context.getApplicationContext());
+            List<HourlyForecast> allHourly = database.getForecastsByCityId(currentWeatherDataList.getCity_id());
+            int tzOffsetMs = currentWeatherDataList.getTimeZoneSeconds() * 1000;
+            holder.meteographView.setData(allHourly, tzOffsetMs);
         }
         //No update for error needed
     }
