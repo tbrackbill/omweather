@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/card_meteograph"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layoutDirection="ltr"
+    android:layout_margin="@dimen/card_margin">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/white">
+
+        <org.woheller69.weather.ui.views.MeteographView
+            android:id="@+id/meteograph_view"
+            android:layout_width="match_parent"
+            android:layout_height="200dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="7dp"
+            android:layout_marginBottom="3dp"
+            android:textSize="10sp"
+            android:textColor="@color/colorPrimaryDark"
+            android:text="Weather data by Open-Meteo.com (CC BY 4.0)" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>
