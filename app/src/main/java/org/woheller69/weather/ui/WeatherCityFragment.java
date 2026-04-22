@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -29,10 +30,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.MapTileProviderBasic;
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase;
+import org.osmdroid.tileprovider.cachemanager.CacheManager;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.tileprovider.tilesource.XYTileSource;
+import org.osmdroid.util.BoundingBox;
 import org.osmdroid.util.GeoPoint;
-import org.osmdroid.util.MapTileIndex;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.TilesOverlay;
 import org.woheller69.weather.R;
@@ -94,6 +96,11 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
+        // Must be called before the MapView inflates so it can find its cache directory
+        Configuration.getInstance().load(requireContext(),
+                PreferenceManager.getDefaultSharedPreferences(requireContext()));
+        Configuration.getInstance().setUserAgentValue(requireContext().getPackageName());
+
         final View v = inflater.inflate(R.layout.fragment_weather_forecast_city_overview, container, false);
 
         mMeteographView = v.findViewById(R.id.meteograph_view);
@@ -102,9 +109,9 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
         mDayRecycler    = v.findViewById(R.id.recycler_view_course_day);
         mDayHeader      = v.findViewById(R.id.recycler_view_header);
 
-        mDayRecycler.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
+        mDayRecycler.setLayoutManager(
+                new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
 
-        // Swipe down anywhere on the view to refresh
         v.setOnTouchListener(new OnSwipeDownListener(getContext()) {
             public void onSwipeDown() {
                 WeatherPagerAdapter.refreshSingleData(getContext(), true, mCityId);
@@ -156,8 +163,7 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
     private void fetchRadar(CityToWatch city, int tzSeconds) {
         if (getContext() == null) return;
 
-        Configuration.getInstance().load(getContext(),
-                PreferenceManager.getDefaultSharedPreferences(getContext()));
+        // Set up OSM basemap
         mRadarMap.setTileSource(TileSourceFactory.MAPNIK);
         mRadarMap.setMultiTouchControls(false);
         mRadarMap.setBuiltInZoomControls(false);
@@ -166,31 +172,31 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
         mRadarMap.getController().setZoom(7.0);
         mRadarMap.getController().setCenter(new GeoPoint(city.getLatitude(), city.getLongitude()));
 
+        // Pre-cache basemap tiles for offline use on unmetered connections
+        preCacheBasemap(city);
+
+        // Overlay the latest Rainviewer radar frame
         RequestQueue queue = Volley.newRequestQueue(getContext().getApplicationContext());
         JsonObjectRequest jsonReq = new JsonObjectRequest(Request.Method.GET,
                 "https://api.rainviewer.com/public/weather-maps.json", null,
                 response -> {
                     if (!isAdded()) return;
                     try {
-                        final String host = response.getString("host");
-                        JSONArray past    = response.getJSONObject("radar").getJSONArray("past");
+                        String host   = response.getString("host");
+                        JSONArray past = response.getJSONObject("radar").getJSONArray("past");
                         JSONObject latest = past.getJSONObject(past.length() - 1);
-                        final String path = latest.getString("path");
-                        long timeGmt      = latest.getLong("time") * 1000L;
+                        String path   = latest.getString("path");
+                        long timeGmt  = latest.getLong("time") * 1000L;
 
-                        OnlineTileSourceBase radarSource = new OnlineTileSourceBase(
-                                "Rainviewer", 0, 12, 512, "", new String[]{}) {
-                            @Override
-                            public String getTileURLString(long pMapTileIndex) {
-                                return host + path + "/512/"
-                                        + MapTileIndex.getZoom(pMapTileIndex) + "/"
-                                        + MapTileIndex.getX(pMapTileIndex) + "/"
-                                        + MapTileIndex.getY(pMapTileIndex) + "/2/1_1.png";
-                            }
-                        };
+                        // URL pattern: host + path + "/256/" + z + "/" + x + "/" + y + "/2/1_1.png"
+                        XYTileSource radarSource = new XYTileSource(
+                                "Rainviewer_" + timeGmt, 1, 12, 256, "/2/1_1.png",
+                                new String[]{host + path + "/256/"});
 
-                        MapTileProviderBasic radarProvider = new MapTileProviderBasic(
-                                getContext().getApplicationContext(), radarSource);
+                        MapTileProviderBasic radarProvider =
+                                new MapTileProviderBasic(getContext().getApplicationContext());
+                        radarProvider.setTileSource(radarSource);
+
                         TilesOverlay radarOverlay = new TilesOverlay(radarProvider, getContext());
                         radarOverlay.setLoadingBackgroundColor(Color.TRANSPARENT);
 
@@ -207,8 +213,24 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
                     }
                 },
                 error -> Log.d("RadarCard", "json: " + error));
-        jsonReq.setRetryPolicy(new DefaultRetryPolicy(2000, 0, 1f));
+        jsonReq.setRetryPolicy(new DefaultRetryPolicy(5000, 1, 1f));
         queue.add(jsonReq);
+    }
+
+    // Download basemap tiles around this city for offline rendering. Skipped on metered connections.
+    private void preCacheBasemap(CityToWatch city) {
+        if (getContext() == null || mRadarMap == null) return;
+        ConnectivityManager cm =
+                (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm != null && cm.isActiveNetworkMetered()) return;
+        try {
+            CacheManager cache = new CacheManager(mRadarMap);
+            double lat = city.getLatitude(), lon = city.getLongitude();
+            BoundingBox bbox = new BoundingBox(lat + 2.5, lon + 2.5, lat - 2.5, lon - 2.5);
+            cache.downloadAreaAsyncNoUI(getContext().getApplicationContext(), bbox, 5, 8, null);
+        } catch (Exception e) {
+            Log.d("RadarCard", "pre-cache skipped: " + e.getMessage());
+        }
     }
 
     @Override
@@ -225,9 +247,7 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
 
     @Override
     public void processNewCurrentWeatherData(CurrentWeatherData data) {
-        if (data != null && data.getCity_id() == mCityId) {
-            loadData();
-        }
+        if (data != null && data.getCity_id() == mCityId) loadData();
     }
 
     @Override
