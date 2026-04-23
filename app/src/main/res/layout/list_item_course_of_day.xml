@@ -25,8 +25,9 @@
             android:layout_marginStart="-15dp"/>
         <ImageView
             android:id="@+id/course_of_day_weather"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:scaleType="fitCenter"
             android:src="@drawable/wmo_icon_00d" />
         <ImageView
             android:id="@+id/course_of_day_wind_icon"
@@ -39,7 +40,7 @@
     </LinearLayout>
     <androidx.legacy.widget.Space
         android:layout_width="match_parent"
-        android:layout_height="10dp" />
+        android:layout_height="4dp" />
 
     <TextView
         android:id="@+id/course_of_day_temperature"

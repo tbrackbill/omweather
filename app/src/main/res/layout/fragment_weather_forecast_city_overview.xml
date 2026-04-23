@@ -5,11 +5,11 @@
     android:orientation="vertical"
     android:padding="@dimen/card_margin">
 
-    <!-- Meteograph card — 42% of height -->
+    <!-- Meteograph card — 30% of height -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="42"
+        android:layout_weight="30"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout
@@ -37,11 +37,11 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Radar card — 32% of height -->
+    <!-- Radar card — 28% of height -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="32"
+        android:layout_weight="28"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout
@@ -50,37 +50,7 @@
             android:orientation="vertical"
             android:background="@color/cardBackground">
 
-            <RelativeLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="4dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_centerInParent="true"
-                    android:text="RADAR"
-                    android:textAllCaps="true"
-                    android:textColor="@color/colorPrimaryDark"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/card_radar_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:layout_centerVertical="true"
-                    android:textColor="@color/middlegrey"
-                    android:textSize="10sp" />
-
-            </RelativeLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="@color/colorAccent" />
-
-            <org.osmdroid.views.MapView
+            <WebView
                 android:id="@+id/card_radar_map"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -99,11 +69,11 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Hourly card — 26% of height -->
+    <!-- Hourly card — 42% of height -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="26"
+        android:layout_weight="42"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout

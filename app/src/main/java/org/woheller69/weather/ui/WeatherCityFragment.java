@@ -3,13 +3,13 @@ package org.woheller69.weather.ui;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.net.ConnectivityManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -28,15 +28,6 @@ import com.android.volley.toolbox.Volley;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.osmdroid.config.Configuration;
-import org.osmdroid.tileprovider.MapTileProviderBasic;
-import org.osmdroid.tileprovider.cachemanager.CacheManager;
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
-import org.osmdroid.tileprovider.tilesource.XYTileSource;
-import org.osmdroid.util.BoundingBox;
-import org.osmdroid.util.GeoPoint;
-import org.osmdroid.views.MapView;
-import org.osmdroid.views.overlay.TilesOverlay;
 import org.woheller69.weather.R;
 import org.woheller69.weather.activities.ForecastCityActivity;
 import org.woheller69.weather.database.CityToWatch;
@@ -64,7 +55,7 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
     private int mCityId = -1;
 
     private MeteographView mMeteographView;
-    private MapView        mRadarMap;
+    private WebView        mRadarWebView;
     private TextView       mRadarTime;
     private RecyclerView   mDayRecycler;
     private TextView       mDayHeader;
@@ -73,6 +64,8 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
     private int     mTzOffsetMs = 0;
     private boolean mFahrenheit = false;
     private boolean mUseMetric  = true;
+
+    private boolean mWebViewLoaded = false;
 
     public static WeatherCityFragment newInstance(Bundle args) {
         WeatherCityFragment f = new WeatherCityFragment();
@@ -92,22 +85,23 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
         super.onDetach();
     }
 
-    @SuppressLint("ClickableViewAccessibility")
+    @SuppressLint({"ClickableViewAccessibility", "SetJavaScriptEnabled"})
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // Must be called before the MapView inflates so it can find its cache directory
-        Configuration.getInstance().load(requireContext(),
-                PreferenceManager.getDefaultSharedPreferences(requireContext()));
-        Configuration.getInstance().setUserAgentValue(requireContext().getPackageName());
-
         final View v = inflater.inflate(R.layout.fragment_weather_forecast_city_overview, container, false);
 
         mMeteographView = v.findViewById(R.id.meteograph_view);
-        mRadarMap       = v.findViewById(R.id.card_radar_map);
+        mRadarWebView   = v.findViewById(R.id.card_radar_map);
         mRadarTime      = v.findViewById(R.id.card_radar_time);
         mDayRecycler    = v.findViewById(R.id.recycler_view_course_day);
         mDayHeader      = v.findViewById(R.id.recycler_view_header);
+
+        WebSettings ws = mRadarWebView.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        mRadarWebView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
 
         mDayRecycler.setLayoutManager(
                 new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
@@ -145,7 +139,7 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
         setupHourlyAdapter(mAllHourly);
 
         CityToWatch city = db.getCityToWatch(mCityId);
-        if (city != null) fetchRadar(city, cwd.getTimeZoneSeconds());
+        if (city != null) fetchRadar(city);
     }
 
     private void setupHourlyAdapter(List<HourlyForecast> allHourly) {
@@ -160,89 +154,54 @@ public class WeatherCityFragment extends Fragment implements IUpdateableCityUI {
         mDayRecycler.setFocusable(false);
     }
 
-    private void fetchRadar(CityToWatch city, int tzSeconds) {
-        if (getContext() == null) return;
+    private void fetchRadar(CityToWatch city) {
+        if (getContext() == null || mRadarWebView == null) return;
 
-        // Set up OSM basemap
-        mRadarMap.setTileSource(TileSourceFactory.MAPNIK);
-        mRadarMap.setMultiTouchControls(false);
-        mRadarMap.setBuiltInZoomControls(false);
-        mRadarMap.setMinZoomLevel(7.0);
-        mRadarMap.setMaxZoomLevel(7.0);
-        mRadarMap.getController().setZoom(7.0);
-        mRadarMap.getController().setCenter(new GeoPoint(city.getLatitude(), city.getLongitude()));
+        double lat = city.getLatitude();
+        double lon = city.getLongitude();
 
-        // Pre-cache basemap tiles for offline use on unmetered connections
-        preCacheBasemap(city);
+        if (!mWebViewLoaded) {
+            mWebViewLoaded = true;
+            String url = "file:///android_asset/radar.html?lat=" + lat + "&lon=" + lon;
+            mRadarWebView.loadUrl(url);
+            Log.d("RadarCard", "WebView loading " + url);
+        }
 
-        // Overlay the latest Rainviewer radar frame
-        RequestQueue queue = Volley.newRequestQueue(getContext().getApplicationContext());
-        JsonObjectRequest jsonReq = new JsonObjectRequest(Request.Method.GET,
-                "https://api.rainviewer.com/public/weather-maps.json", null,
+        RequestQueue queue = Volley.newRequestQueue(getContext());
+        JsonObjectRequest req = new JsonObjectRequest(
+                Request.Method.GET,
+                "https://api.rainviewer.com/public/weather-maps.json",
+                null,
                 response -> {
-                    if (!isAdded()) return;
                     try {
-                        String host   = response.getString("host");
-                        JSONArray past = response.getJSONObject("radar").getJSONArray("past");
+                        JSONObject radar = response.getJSONObject("radar");
+                        JSONArray past   = radar.getJSONArray("past");
+                        if (past.length() == 0) return;
                         JSONObject latest = past.getJSONObject(past.length() - 1);
-                        String path   = latest.getString("path");
-                        long timeGmt  = latest.getLong("time") * 1000L;
+                        String path = latest.getString("path");
+                        long   time = latest.getLong("time");
 
-                        // URL pattern: host + path + "/256/" + z + "/" + x + "/" + y + "/2/1_1.png"
-                        XYTileSource radarSource = new XYTileSource(
-                                "Rainviewer_" + timeGmt, 1, 12, 256, "/2/1_1.png",
-                                new String[]{host + path + "/256/"});
+                        String tileUrl = "https://tilecache.rainviewer.com" + path
+                                + "/256/{z}/{x}/{y}/2/1_1.png";
 
-                        MapTileProviderBasic radarProvider =
-                                new MapTileProviderBasic(getContext().getApplicationContext());
-                        radarProvider.setTileSource(radarSource);
+                        mRadarWebView.evaluateJavascript(
+                                "setRadarTiles('" + tileUrl + "')", null);
 
-                        TilesOverlay radarOverlay = new TilesOverlay(radarProvider, getContext());
-                        radarOverlay.setLoadingBackgroundColor(Color.TRANSPARENT);
-
-                        mRadarMap.getOverlayManager().clear();
-                        mRadarMap.getOverlayManager().add(radarOverlay);
-                        mRadarMap.invalidate();
-
-                        long localMs = timeGmt + tzSeconds * 1000L;
-                        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-                        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-                        mRadarTime.setText(sdf.format(new Date(localMs)));
+                        if (mRadarTime != null) {
+                            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+                            sdf.setTimeZone(TimeZone.getDefault());
+                            mRadarTime.setText(sdf.format(new Date(time * 1000L)));
+                        }
+                        Log.d("RadarCard", "radar tiles injected: " + tileUrl);
                     } catch (JSONException e) {
-                        Log.d("RadarCard", "json: " + e);
+                        Log.e("RadarCard", "JSON parse error", e);
                     }
                 },
-                error -> Log.d("RadarCard", "json: " + error));
-        jsonReq.setRetryPolicy(new DefaultRetryPolicy(5000, 1, 1f));
-        queue.add(jsonReq);
-    }
+                error -> Log.e("RadarCard", "Rainviewer API error: " + error));
 
-    // Download basemap tiles around this city for offline rendering. Skipped on metered connections.
-    private void preCacheBasemap(CityToWatch city) {
-        if (getContext() == null || mRadarMap == null) return;
-        ConnectivityManager cm =
-                (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (cm != null && cm.isActiveNetworkMetered()) return;
-        try {
-            CacheManager cache = new CacheManager(mRadarMap);
-            double lat = city.getLatitude(), lon = city.getLongitude();
-            BoundingBox bbox = new BoundingBox(lat + 2.5, lon + 2.5, lat - 2.5, lon - 2.5);
-            cache.downloadAreaAsyncNoUI(getContext().getApplicationContext(), bbox, 5, 8, null);
-        } catch (Exception e) {
-            Log.d("RadarCard", "pre-cache skipped: " + e.getMessage());
-        }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (mRadarMap != null) mRadarMap.onResume();
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        if (mRadarMap != null) mRadarMap.onPause();
+        req.setRetryPolicy(new DefaultRetryPolicy(10000, 1,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(req);
     }
 
     @Override
