@@ -123,7 +123,7 @@ public class MeteographView extends View {
         tempLabelPaint.setColor(COLOR_LABEL);
         tempLabelPaint.setTextSize(8f * dp);
 
-        legendPaint.setTextSize(6f * dp);
+        legendPaint.setTextSize(7f * dp);
         legendPaint.setTextAlign(Paint.Align.LEFT);
 
         bgPaint.setColor(0xBBFFFFFF);
@@ -396,9 +396,7 @@ public class MeteographView extends View {
         float ts  = legendPaint.getTextSize();
         float y   = p2Top + ts + pad;
 
-        String[] labels = useFahrenheit
-                ? new String[]{"<20°", "20°", "55°", "60°", "80°", ">100°"}
-                : new String[]{"<-7°", "-7°", "13°", "16°", "27°", ">38°"};
+        String[] labels = {"Freezing", "Cold", "Cool", "Comfy", "Hot", "Scorching"};
         int[] colors = {COL_TEMP_PURPLE, COL_TEMP_BLUE, COL_TEMP_TEAL, COL_TEMP_GREEN, COL_TEMP_ORANGE, COL_TEMP_MAROON};
 
         float[] widths = new float[labels.length];
