@@ -7,6 +7,8 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 
 import org.woheller69.weather.database.HourlyForecast;
@@ -82,6 +84,14 @@ public class MeteographView extends View {
     private final Path  shadePath = new Path();
     private final RectF labelBg   = new RectF();
 
+    private float mZoom = 1f;
+    private float mPanFrac = 0f;
+    private ScaleGestureDetector mScaleDetector;
+    private float mLastTouchX;
+    private final RectF mResetBounds = new RectF();
+    private final Paint mResetBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mResetTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
     private float plotLeft, plotRight;
     private float p1Top, p1Bot, p2Top, p2Bot;
     private float labelBandMid;
@@ -142,6 +152,28 @@ public class MeteographView extends View {
         microTickPaint.setStrokeWidth(0.8f * dp);
         float dash = 4f * dp;
         microTickPaint.setPathEffect(new DashPathEffect(new float[]{dash, dash}, 0));
+
+        mResetBgPaint.setColor(0xDDFFFFFF);
+        mResetBgPaint.setStyle(Paint.Style.FILL);
+        mResetTextPaint.setColor(0xFF1565C0);
+        mResetTextPaint.setTextSize(8f * dp);
+        mResetTextPaint.setTextAlign(Paint.Align.CENTER);
+
+        mScaleDetector = new ScaleGestureDetector(context,
+                new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScale(ScaleGestureDetector d) {
+                        float newZoom = Math.max(1f, Math.min(20f, mZoom * d.getScaleFactor()));
+                        float focusFrac = (d.getFocusX() - plotLeft)
+                                / Math.max(plotRight - plotLeft, 1f);
+                        mPanFrac += focusFrac / mZoom - focusFrac / newZoom;
+                        mZoom = newZoom;
+                        clampPan();
+                        invalidate();
+                        return true;
+                    }
+                });
+        setClickable(true);
     }
 
     public void setData(List<HourlyForecast> allHourly, int tzOffsetMs, boolean fahrenheit, boolean useMetric) {
@@ -192,8 +224,11 @@ public class MeteographView extends View {
         if (plotForecasts == null || plotForecasts.isEmpty()) return;
         int N = plotForecasts.size();
         float[] xs = new float[N];
-        float plotW = plotRight - plotLeft;
-        for (int i = 0; i < N; i++) xs[i] = plotLeft + i * plotW / Math.max(N - 1, 1);
+        float viewW = plotRight - plotLeft;
+        for (int i = 0; i < N; i++) {
+            float dataFrac = (float) i / Math.max(N - 1, 1);
+            xs[i] = plotLeft + (dataFrac - mPanFrac) * mZoom * viewW;
+        }
 
         drawPanel1Background(canvas, xs, N);
         drawTickGrid(canvas, xs, N);
@@ -203,6 +238,53 @@ public class MeteographView extends View {
         drawPanel1Labels(canvas);
         drawPanel2Labels(canvas);
         drawPanel2Legend(canvas);
+        if (mZoom > 1.01f) drawResetBox(canvas);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        mScaleDetector.onTouchEvent(event);
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mLastTouchX = event.getX();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (!mScaleDetector.isInProgress()) {
+                    float dx = event.getX() - mLastTouchX;
+                    mPanFrac -= dx / Math.max(plotRight - plotLeft, 1f) / mZoom;
+                    clampPan();
+                    invalidate();
+                }
+                mLastTouchX = event.getX();
+                break;
+            case MotionEvent.ACTION_UP:
+                if (mZoom > 1.01f && mResetBounds.contains(event.getX(), event.getY())) {
+                    mZoom = 1f;
+                    mPanFrac = 0f;
+                    invalidate();
+                }
+                break;
+        }
+        return true;
+    }
+
+    private void clampPan() {
+        float maxPan = Math.max(0f, 1f - 1f / mZoom);
+        mPanFrac = Math.max(0f, Math.min(maxPan, mPanFrac));
+    }
+
+    private void drawResetBox(Canvas canvas) {
+        float dp  = getResources().getDisplayMetrics().density;
+        float pad = 3f * dp;
+        float ts  = mResetTextPaint.getTextSize();
+        String label = "⊖ reset";
+        float w = mResetTextPaint.measureText(label) + pad * 2f;
+        float h = ts + pad * 2f;
+        mResetBounds.set(plotRight - w - 2f * dp, 2f * dp,
+                plotRight - 2f * dp, 2f * dp + h);
+        canvas.drawRoundRect(mResetBounds, 4f * dp, 4f * dp, mResetBgPaint);
+        canvas.drawText(label, mResetBounds.centerX(),
+                mResetBounds.top + pad + ts * 0.85f, mResetTextPaint);
     }
 
     private void drawPanel1Background(Canvas canvas, float[] xs, int N) {
@@ -350,7 +432,7 @@ public class MeteographView extends View {
         float pad = 2f * dp;
         float ts  = rainLabelPaint.getTextSize();
 
-        String rainMax = useMetric ? "💧 10mm" : "💧 0.4\"";
+        String rainMax = useMetric ? "💧 10mm/h" : "💧 0.4\"/h";
         String windMax = "💨 30mph";
 
         drawLabelWithBg(canvas, rainMax, plotLeft + pad, p1Top + ts + pad,                    rainLabelPaint, Paint.Align.LEFT);

@@ -5,11 +5,11 @@
     android:orientation="vertical"
     android:padding="@dimen/card_margin">
 
-    <!-- Meteograph card — 30% of height -->
+    <!-- Meteograph card — equal share of remaining height -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="30"
+        android:layout_weight="1"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout
@@ -37,11 +37,11 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Radar card — 28% of height -->
+    <!-- Radar card — equal share of remaining height -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="28"
+        android:layout_weight="1"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout
@@ -69,11 +69,11 @@
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Hourly card — 42% of height -->
+    <!-- Hourly card — sized to content -->
     <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="42"
+        android:layout_height="wrap_content"
+        android:layout_weight="0"
         android:layout_margin="@dimen/card_margin">
 
         <LinearLayout
@@ -101,8 +101,7 @@
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recycler_view_course_day"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
+                android:layout_height="wrap_content"
                 android:layout_margin="5dp"
                 android:orientation="horizontal" />
 

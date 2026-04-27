@@ -4,15 +4,15 @@
     android:layout_height="wrap_content"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="6dp">
 
     <TextView
         android:id="@+id/course_of_day_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="5dp"
+        android:layout_marginBottom="3dp"
         android:text="14:42"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <LinearLayout
@@ -25,14 +25,14 @@
             android:layout_marginStart="-15dp"/>
         <ImageView
             android:id="@+id/course_of_day_weather"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:scaleType="fitCenter"
             android:src="@drawable/wmo_icon_00d" />
         <ImageView
             android:id="@+id/course_of_day_wind_icon"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:translationX="-15dp"
             android:layout_marginEnd="-15dp"
             android:src="@drawable/ic_wind_orange"
@@ -40,68 +40,68 @@
     </LinearLayout>
     <androidx.legacy.widget.Space
         android:layout_width="match_parent"
-        android:layout_height="4dp" />
+        android:layout_height="2dp" />
 
     <TextView
         android:id="@+id/course_of_day_temperature"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="3dp"
+        android:layout_marginBottom="2dp"
         android:text="xy°C"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <TextView
         android:id="@+id/course_of_day_humidity"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="3dp"
+        android:layout_marginBottom="2dp"
         android:text="xy %"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <TextView
         android:id="@+id/course_of_day_pressure"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="3dp"
+        android:layout_marginBottom="2dp"
         android:text="xy hpa"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <TextView
         android:id="@+id/course_of_day_precipitation"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="3dp"
+        android:layout_marginBottom="2dp"
         android:text="xy mm"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <TextView
         android:id="@+id/course_of_day_wind_speed"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="3dp"
+        android:layout_marginBottom="2dp"
         android:text="xy Bft"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="12sp"
         android:textColor="@color/colorPrimaryDark" />
 
     <ImageView
         android:id="@+id/course_of_day_wind_direction"
-        android:layout_width="20sp"
-        android:layout_height="20sp"
-        android:layout_marginBottom="3dp"
+        android:layout_width="16sp"
+        android:layout_height="16sp"
+        android:layout_marginBottom="2dp"
         android:src="@drawable/ic_south_24px" />
 
     <TextView
         android:id="@+id/course_of_day_uv_index"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:layout_marginBottom="3dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="2dp"
         android:text="uv xy"
         android:textColor="@color/colorPrimaryDark"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
+        android:textSize="12sp" />
 
 </LinearLayout>
