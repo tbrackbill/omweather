@@ -42,6 +42,8 @@ public class MeteographView extends View {
     private static final int COL_TEMP_ORANGE = 0xFFD84315;
     private static final int COL_TEMP_MAROON = 0xFF880E4F;
 
+    private static final int COLOR_RH          = 0xFF29B6F6;
+
     private static final int COLOR_CLOUD      = 0xFFE6DFD0;
     private static final int COLOR_SUN        = 0xFFFFF7C0;
     private static final int COLOR_RAIN_FILL  = 0xCC1B4CF0;
@@ -65,6 +67,7 @@ public class MeteographView extends View {
     private final Paint sunPaint       = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rainPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint windPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint rhPaint        = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tempSegPaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint coldShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint warmShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -81,6 +84,7 @@ public class MeteographView extends View {
     private final Path  sunPath   = new Path();
     private final Path  rainPath  = new Path();
     private final Path  windPath  = new Path();
+    private final Path  rhPath    = new Path();
     private final Path  shadePath = new Path();
     private final RectF labelBg   = new RectF();
 
@@ -112,6 +116,13 @@ public class MeteographView extends View {
         windPaint.setStrokeWidth(2f * dp);
         windPaint.setStrokeCap(Paint.Cap.ROUND);
         windPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        rhPaint.setColor(COLOR_RH);
+        rhPaint.setStyle(Paint.Style.STROKE);
+        rhPaint.setStrokeWidth(1.5f * dp);
+        rhPaint.setStrokeCap(Paint.Cap.ROUND);
+        rhPaint.setStrokeJoin(Paint.Join.ROUND);
+        rhPaint.setPathEffect(new DashPathEffect(new float[]{3f * dp, 3f * dp}, 0));
 
         tempSegPaint.setStyle(Paint.Style.STROKE);
         tempSegPaint.setStrokeWidth(3f * dp);
@@ -337,6 +348,15 @@ public class MeteographView extends View {
             else        windPath.lineTo(xs[i], windY);
         }
         canvas.drawPath(windPath, windPaint);
+
+        rhPath.reset();
+        for (int i = 0; i < N; i++) {
+            float rh  = Math.max(0f, Math.min(100f, plotForecasts.get(i).getHumidity()));
+            float rhY = p1Bot - (rh / 100f) * panelH;
+            if (i == 0) rhPath.moveTo(xs[i], rhY);
+            else        rhPath.lineTo(xs[i], rhY);
+        }
+        canvas.drawPath(rhPath, rhPaint);
     }
 
     private void drawDayLabels(Canvas canvas, float[] xs, int N) {
@@ -426,19 +446,40 @@ public class MeteographView extends View {
         canvas.drawPath(shadePath, colder ? coldShadePaint : warmShadePaint);
     }
 
-    // Panel 1: rain labels (blue, left) and wind labels (green, right) — drawn inside plot
+    // Panel 1: labels — rain/wind/RH max stacked at top-right; min labels at corners
     private void drawPanel1Labels(Canvas canvas) {
         float dp  = getResources().getDisplayMetrics().density;
         float pad = 2f * dp;
+        float gap = 5f * dp;
         float ts  = rainLabelPaint.getTextSize();
+        float y   = p1Top + ts + pad;
 
         String rainMax = useMetric ? "💧 10mm/h" : "💧 0.4\"/h";
         String windMax = "💨 30mph";
+        String rhLabel = "~ RH";
 
-        drawLabelWithBg(canvas, rainMax, plotLeft + pad, p1Top + ts + pad,                    rainLabelPaint, Paint.Align.LEFT);
-        drawLabelWithBg(canvas, "0",     plotLeft + pad, p1Bot - pad,                         rainLabelPaint, Paint.Align.LEFT);
-        drawLabelWithBg(canvas, windMax, plotRight - pad, p1Top + windLabelPaint.getTextSize() + pad, windLabelPaint, Paint.Align.RIGHT);
-        drawLabelWithBg(canvas, "0",     plotRight - pad, p1Bot - pad,                        windLabelPaint, Paint.Align.RIGHT);
+        // Build a plain text paint for the RH label (same size as other labels, RH colour)
+        Paint rhTxt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        rhTxt.setColor(COLOR_RH);
+        rhTxt.setTextSize(ts);
+        rhTxt.setTextAlign(Paint.Align.RIGHT);
+
+        float wRh   = rhTxt.measureText(rhLabel);
+        float wWind = windLabelPaint.measureText(windMax);
+        float wRain = rainLabelPaint.measureText(rainMax);
+
+        // Right-to-left: RH | wind | rain
+        float xRhRight   = plotRight - pad;
+        float xWindRight = xRhRight - wRh - gap;
+        float xRainRight = xWindRight - wWind - gap;
+
+        drawLabelWithBg(canvas, rhLabel, xRhRight,   y, rhTxt,          Paint.Align.RIGHT);
+        drawLabelWithBg(canvas, windMax, xWindRight, y, windLabelPaint, Paint.Align.RIGHT);
+        drawLabelWithBg(canvas, rainMax, xRainRight, y, rainLabelPaint, Paint.Align.RIGHT);
+
+        // Min labels: rain bottom-left, wind bottom-right
+        drawLabelWithBg(canvas, "0", plotLeft  + pad, p1Bot - pad, rainLabelPaint, Paint.Align.LEFT);
+        drawLabelWithBg(canvas, "0", plotRight - pad, p1Bot - pad, windLabelPaint, Paint.Align.RIGHT);
     }
 
     // Panel 2: temperature Y-axis labels inside with white backing
