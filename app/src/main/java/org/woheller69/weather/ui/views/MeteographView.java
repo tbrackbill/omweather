@@ -42,7 +42,7 @@ public class MeteographView extends View {
     private static final int COL_TEMP_ORANGE = 0xFFD84315;
     private static final int COL_TEMP_MAROON = 0xFF880E4F;
 
-    private static final int COLOR_RH          = 0xFF29B6F6;
+    private static final int COLOR_RH          = 0x5529B6F6;
 
     private static final int COLOR_CLOUD      = 0xFFE6DFD0;
     private static final int COLOR_SUN        = 0xFFFFF7C0;
@@ -119,7 +119,7 @@ public class MeteographView extends View {
 
         rhPaint.setColor(COLOR_RH);
         rhPaint.setStyle(Paint.Style.STROKE);
-        rhPaint.setStrokeWidth(1.5f * dp);
+        rhPaint.setStrokeWidth(1.2f * dp);
         rhPaint.setStrokeCap(Paint.Cap.ROUND);
         rhPaint.setStrokeJoin(Paint.Join.ROUND);
         rhPaint.setPathEffect(new DashPathEffect(new float[]{3f * dp, 3f * dp}, 0));
@@ -460,7 +460,7 @@ public class MeteographView extends View {
 
         // Build a plain text paint for the RH label (same size as other labels, RH colour)
         Paint rhTxt = new Paint(Paint.ANTI_ALIAS_FLAG);
-        rhTxt.setColor(COLOR_RH);
+        rhTxt.setColor(0x8829B6F6);
         rhTxt.setTextSize(ts);
         rhTxt.setTextAlign(Paint.Align.RIGHT);
 
