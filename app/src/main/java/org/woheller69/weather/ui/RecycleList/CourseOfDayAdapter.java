@@ -111,16 +111,12 @@ public class CourseOfDayAdapter extends RecyclerView.Adapter<CourseOfDayAdapter.
             }
         } else holder.pressure.setVisibility(View.GONE);
 
-        if (prefManager.getBoolean("pref_showHourlyUvIndex", false)) {
-            if (courseOfDayList.get(position).getUvIndex() == -1) {
-                holder.uv_index.setVisibility(View.GONE);
-            } else {
-                holder.uv_index.setVisibility(View.VISIBLE);
-                holder.uv_index.setText(String.format("UV %s", StringFormatUtils.formatInt(Math.round(courseOfDayList.get(position).getUvIndex()))));
-                holder.uv_index.setBackground(StringFormatUtils.colorUVindex(context, Math.round(courseOfDayList.get(position).getUvIndex())));
-            }
-        } else {
+        if (courseOfDayList.get(position).getUvIndex() == -1) {
             holder.uv_index.setVisibility(View.GONE);
+        } else {
+            holder.uv_index.setVisibility(View.VISIBLE);
+            holder.uv_index.setText(String.format("UV %s", StringFormatUtils.formatInt(Math.round(courseOfDayList.get(position).getUvIndex()))));
+            holder.uv_index.setBackground(StringFormatUtils.colorUVindex(context, Math.round(courseOfDayList.get(position).getUvIndex())));
         }
         
         holder.temperature.setText(StringFormatUtils.formatTemperature(context, courseOfDayList.get(position).getTemperature()));

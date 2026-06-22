@@ -69,6 +69,7 @@ public class MeteographView extends View {
     private final Paint windPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rhPaint        = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tempSegPaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint tempHiLoPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint coldShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint warmShadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dayLabelPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -127,6 +128,9 @@ public class MeteographView extends View {
         tempSegPaint.setStyle(Paint.Style.STROKE);
         tempSegPaint.setStrokeWidth(3f * dp);
         tempSegPaint.setStrokeCap(Paint.Cap.ROUND);
+
+        tempHiLoPaint.setTextSize(7f * dp);
+        tempHiLoPaint.setTextAlign(Paint.Align.CENTER);
 
         coldShadePaint.setColor(COLOR_COLD_SHADE); coldShadePaint.setStyle(Paint.Style.FILL);
         warmShadePaint.setColor(COLOR_WARM_SHADE); warmShadePaint.setStyle(Paint.Style.FILL);
@@ -392,6 +396,16 @@ public class MeteographView extends View {
         float pad   = 6f * dp;
         float drawH = (p2Bot - p2Top) - 2 * pad;
 
+        // Horizontal gridlines at round temperature values
+        Paint gridPaint = new Paint();
+        gridPaint.setColor(0x28B0BEC8);
+        gridPaint.setStyle(Paint.Style.STROKE);
+        gridPaint.setStrokeWidth(0.8f * dp);
+        for (float g : computeGridTempsC(tMin, tMax)) {
+            float gy = tempY(g, tMin, tMax, drawH, pad);
+            canvas.drawLine(plotLeft, gy, plotRight, gy, gridPaint);
+        }
+
         // Yesterday shading
         for (int i = 0; i < N - 1; i++) {
             if (Float.isNaN(yesterdayTemp[i]) || Float.isNaN(yesterdayTemp[i + 1])) continue;
@@ -419,6 +433,83 @@ public class MeteographView extends View {
             float avgC = (plotForecasts.get(i).getTemperature() + plotForecasts.get(i + 1).getTemperature()) / 2f;
             tempSegPaint.setColor(tempColor(avgC));
             canvas.drawLine(xs[i], tempYs[i], xs[i + 1], tempYs[i + 1], tempSegPaint);
+        }
+
+        // Daily high/low labels
+        drawPanel2DayExtremes(canvas, xs, N, tMin, tMax, drawH, pad, dp);
+    }
+
+    private float[] computeGridTempsC(float tMin, float tMax) {
+        List<Float> lines = new ArrayList<>();
+        if (useFahrenheit) {
+            float tMinF = tMin * 9f / 5f + 32f;
+            float tMaxF = tMax * 9f / 5f + 32f;
+            float stepF = 10f;
+            if ((tMaxF - tMinF) / stepF > 7f) stepF = 20f;
+            float firstF = (float) Math.ceil(tMinF / stepF) * stepF;
+            for (float gF = firstF; gF <= tMaxF + 0.01f; gF += stepF) {
+                lines.add((gF - 32f) * 5f / 9f);
+            }
+        } else {
+            float stepC = 5f;
+            if ((tMax - tMin) / stepC > 7f) stepC = 10f;
+            float first = (float) Math.ceil(tMin / stepC) * stepC;
+            for (float g = first; g <= tMax + 0.01f; g += stepC) {
+                lines.add(g);
+            }
+        }
+        float[] result = new float[lines.size()];
+        for (int i = 0; i < lines.size(); i++) result[i] = lines.get(i);
+        return result;
+    }
+
+    private void drawPanel2DayExtremes(Canvas canvas, float[] xs, int N,
+                                        float tMin, float tMax, float drawH, float pad, float dp) {
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        int curDay = -1;
+        int rangeStart = 0;
+        List<int[]> dayRanges = new ArrayList<>();
+
+        for (int i = 0; i < N; i++) {
+            long localTime = plotForecasts.get(i).getForecastTime() + timezoneOffsetMs;
+            cal.setTimeInMillis(localTime);
+            int day = cal.get(Calendar.DAY_OF_YEAR) + cal.get(Calendar.YEAR) * 366;
+            if (day != curDay) {
+                if (curDay != -1) dayRanges.add(new int[]{rangeStart, i});
+                rangeStart = i;
+                curDay = day;
+            }
+        }
+        if (curDay != -1) dayRanges.add(new int[]{rangeStart, N});
+
+        float ts = tempHiLoPaint.getTextSize();
+        float lineOff = 3f * dp;
+
+        for (int[] range : dayRanges) {
+            int start = range[0], end = range[1];
+            if (end - start < 2) continue;
+
+            int hiIdx = start, loIdx = start;
+            for (int i = start + 1; i < end; i++) {
+                if (plotForecasts.get(i).getTemperature() > plotForecasts.get(hiIdx).getTemperature()) hiIdx = i;
+                if (plotForecasts.get(i).getTemperature() < plotForecasts.get(loIdx).getTemperature()) loIdx = i;
+            }
+
+            float hiTempC = plotForecasts.get(hiIdx).getTemperature();
+            float hiY = tempY(hiTempC, tMin, tMax, drawH, pad);
+            tempHiLoPaint.setColor((tempColor(hiTempC) & 0x00FFFFFF) | 0xCC000000);
+            String hiLbl = useFahrenheit
+                    ? Math.round(hiTempC * 9f / 5f + 32f) + "°"
+                    : Math.round(hiTempC) + "°";
+            drawLabelWithBg(canvas, hiLbl, xs[hiIdx], hiY - lineOff, tempHiLoPaint, Paint.Align.CENTER);
+
+            float loTempC = plotForecasts.get(loIdx).getTemperature();
+            float loY = tempY(loTempC, tMin, tMax, drawH, pad);
+            tempHiLoPaint.setColor((tempColor(loTempC) & 0x00FFFFFF) | 0xCC000000);
+            String loLbl = useFahrenheit
+                    ? Math.round(loTempC * 9f / 5f + 32f) + "°"
+                    : Math.round(loTempC) + "°";
+            drawLabelWithBg(canvas, loLbl, xs[loIdx], loY + ts + lineOff, tempHiLoPaint, Paint.Align.CENTER);
         }
     }
 
@@ -482,7 +573,7 @@ public class MeteographView extends View {
         drawLabelWithBg(canvas, "0", plotRight - pad, p1Bot - pad, windLabelPaint, Paint.Align.RIGHT);
     }
 
-    // Panel 2: temperature Y-axis labels inside with white backing
+    // Panel 2: temperature Y-axis labels at round-number grid positions
     private void drawPanel2Labels(Canvas canvas) {
         if (plotForecasts == null || plotForecasts.isEmpty()) return;
         float tMin =  Float.MAX_VALUE, tMax = -Float.MAX_VALUE;
@@ -501,14 +592,12 @@ public class MeteographView extends View {
         float drawH = (p2Bot - p2Top) - 2 * pad;
         float ts    = tempLabelPaint.getTextSize();
 
-        for (int s = 0; s <= 2; s++) {
-            float frac  = (float) s / 2;
-            float tempC = tMin + frac * (tMax - tMin);
-            float y     = p2Top + pad + (1f - frac) * drawH;
-            String lbl  = useFahrenheit
-                    ? Math.round(tempC * 9f / 5f + 32) + "°"
-                    : Math.round(tempC) + "°";
-            drawLabelWithBg(canvas, lbl, plotLeft + 2f * dp, y + ts / 3f, tempLabelPaint, Paint.Align.LEFT);
+        for (float g : computeGridTempsC(tMin, tMax)) {
+            float gy  = tempY(g, tMin, tMax, drawH, pad);
+            String lbl = useFahrenheit
+                    ? Math.round(g * 9f / 5f + 32f) + "°"
+                    : Math.round(g) + "°";
+            drawLabelWithBg(canvas, lbl, plotLeft + 2f * dp, gy + ts / 3f, tempLabelPaint, Paint.Align.LEFT);
         }
     }
 
@@ -547,8 +636,14 @@ public class MeteographView extends View {
     private void drawLabelWithBg(Canvas canvas, String text, float x, float y, Paint paint, Paint.Align align) {
         float ts = paint.getTextSize();
         float w  = paint.measureText(text);
-        float l  = align == Paint.Align.LEFT ? x - 1f : x - w - 1f;
-        float r  = align == Paint.Align.LEFT ? x + w + 1f : x + 1f;
+        float l, r;
+        if (align == Paint.Align.RIGHT) {
+            l = x - w - 1f; r = x + 1f;
+        } else if (align == Paint.Align.CENTER) {
+            l = x - w / 2f - 1f; r = x + w / 2f + 1f;
+        } else {
+            l = x - 1f; r = x + w + 1f;
+        }
         labelBg.set(l, y - ts, r, y + ts * 0.3f);
         canvas.drawRoundRect(labelBg, 2f, 2f, bgPaint);
         Paint.Align old = paint.getTextAlign();
